@@ -1,0 +1,68 @@
+FUNCTION read_mesh(gmsh_file, order):
+    """
+    Inputs:
+      gmsh_file: path to a script or data file that defines a mesh object 'msh'
+      order: 1 (linear), 2 (quadratic), or 3 (cubic)
+
+    Outputs:
+      nodeInfo: struct with fields
+        x: array of node coordinates
+        id: array of node IDs
+      elemInfo: struct with field
+        elements: 2D array of connectivity (node indices per element)
+      boundaryInfo: struct mapping each boundary flag to a list of node IDs
+    """
+
+    # 1) LOAD OR IMPORT THE MESH DEFINITION
+    IF gmsh_file is a filename:
+        EXECUTE or IMPORT gmsh_file to obtain a mesh object msh
+    ELSE:
+        RAISE error “gmsh_file must be a filename or script that defines msh”
+
+    IF msh is not defined:
+        RAISE error “Mesh object ‘msh’ not found”
+
+    # 2) EXTRACT NODES
+    coords ← msh.POS             # Nx2 or Nx3 array of coordinates
+    num_nodes ← LENGTH(coords)
+    nodeInfo.x ← coords[:, 0]    # first column (1D coordinate)
+    nodeInfo.id ← [1 … num_nodes]
+
+    # 3) EXTRACT ELEMENT CONNECTIVITY BASED ON ORDER
+    SWITCH order:
+        CASE 1:
+            # Linear: expect msh.LINES or msh.LINES2
+            lines_data ← msh.LINES
+            # take first 2 columns
+            elem_nodes ← lines_data[:, 0:2]
+        CASE 2:
+            # Quadratic: expect msh.LINES3
+            lines_data ← msh.LINES3
+            elem_nodes ← lines_data[:, 0:3]
+        CASE 3:
+            # Cubic: expect msh.LINES4
+            lines_data ← msh.LINES4
+            elem_nodes ← lines_data[:, 0:4]
+        OTHERWISE:
+            RAISE error “Order must be 1, 2, or 3”
+
+    elemInfo.elements ← elem_nodes
+
+    # 4) EXTRACT BOUNDARY FLAGS (OPTIONAL)
+    boundaryInfo ← EMPTY STRUCT
+    boundaryInfo.allBoundaryNodes ← EMPTY LIST
+
+    IF msh has field PNT AND msh.PNT is not empty:
+        pnt_data ← msh.PNT    # Mx2 array: [nodeID, flag]
+        unique_flags ← UNIQUE(pnt_data[:, 1])
+        FOR each flag IN unique_flags:
+            nodes_with_flag ← FILTER pnt_data rows where column2 == flag, take column1
+            boundaryInfo["flag_" + flag] ← nodes_with_flag
+            APPEND nodes_with_flag TO boundaryInfo.allBoundaryNodes
+        END FOR
+        boundaryInfo.allBoundaryNodes ← UNIQUE(boundaryInfo.allBoundaryNodes)
+    ELSE:
+        WARN “No boundary points found (msh.PNT missing or empty)”
+
+    RETURN nodeInfo, elemInfo, boundaryInfo
+END FUNCTION
