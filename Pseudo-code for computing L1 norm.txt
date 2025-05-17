@@ -1,0 +1,47 @@
+# Pseudo-code for computing L¹ error norm with 4-point Gauss on [0,1]
+
+# 1. Precompute 4-point Gauss nodes and weights on [0,1]
+xi_ref = [–0.861136, –0.339981, +0.339981, +0.861136]      # on [–1,1]
+w_ref  = [0.347855, 0.652145, 0.652145, 0.347855]          # corresponding weights
+xiGP   = map each xi_ref_i to [0,1]:  (xi_ref_i + 1)/2
+wGP    = w_ref / 2                                          # scale weights by 1/2
+
+# 2. Initialize L1 accumulator
+L1 = 0
+
+# 3. Loop over each element e = 1…Nelem
+for each element e:
+    # 3a. Get the global node indices for element e
+    nodes_e = elem(e, :)           # e.g. [i, j] for linear, [i, j, k] for quadratic
+    
+    # 3b. Extract the coordinates r at those nodes
+    r_e = r[nodes_e]               # vector of length = number of local nodes
+    
+    # 3c. Extract the FEM solution values at those nodes
+    phi_e = phi_fem[nodes_e]
+
+    # 4. Loop over Gauss points g = 1…4
+    for g in 1 to 4:
+        xi = xiGP[g]               # reference coordinate in [0,1]
+        w  = wGP[g]                # corresponding weight
+
+        # 4a. Evaluate shape functions and their d/dξ at xi
+        [N, dNdxi] = shapelin(xi)  # N: vector of shape values; dNdxi: their derivatives
+        
+        # 4b. Apply isoparametric map to get physical radius and Jacobian
+        r_gp, drdxi, J = isomap(r_e, N, dNdxi)
+        #    r_gp = Nᵀ · r_e           # physical r at Gauss pt
+        #    drdxi = dNdxiᵀ · r_e       # dr/dξ
+        #    J     = drdxi             # Jacobian dr/dξ
+
+        # 4c. Reconstruct FEM solution at this Gauss point
+        phi_h = Nᵀ * phi_e           # FEM interpolation
+
+        # 4d. Compute analytic solution at r_gp
+        phi_ex = phi_inner / r_gp
+
+        # 4e. Accumulate absolute error × measure (J·w)
+        L1 += abs(phi_h - phi_ex) * J * w
+
+# 5. L1 now holds the approximate ∫|φ_h−φ_exact| dr over the entire domain
+print "L1 error w/ 4-pt Gauss: ", L1
